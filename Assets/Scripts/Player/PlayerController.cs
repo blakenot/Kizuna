@@ -7,48 +7,45 @@ using UnityEngine.UI;
 public class PlayerController : MonoBehaviour
 {
     public enum ColorState { Red, Green, Blue }
-    [SerializeField] float[] laneX = new float[] { -4f, 0f, 4f };
-    int targetLane = 1;
 
     [Header("Movement")]
+    [SerializeField] float[] laneX = { -4f, 0f, 4f };
     [SerializeField] float laneMoveSpeed = 14f;
     [SerializeField] float forwardSpeed = 10f;
+    int targetLane = 1;
     Rigidbody rb;
 
     [Header("Animator")]
     [SerializeField] Animator anim;
 
-    [Header("Tile Materials UI")]
+    [Header("Materials")]
     [SerializeField] Material redMat;
     [SerializeField] Material greenMat;
     [SerializeField] Material blueMat;
-
-    [Header("Jump Settings")]
-    [SerializeField] float jumpHeight = 7f;
-    [SerializeField] float jumpForwardBoost = 10f;
-    [SerializeField] float jumpCooldown = 1f;
-    bool canJump = true;
-    bool isGrounded = true;
-    float jumpTimer = 0f;
-
-    [Header("Ground Check")]
-    [SerializeField] Transform groundCheckPoint;
-    [SerializeField] float groundCheckRadius = 0.2f;
-    [SerializeField] LayerMask groundMask;
 
     [Header("Color System")]
     [SerializeField] Renderer[] bodyRenderers;
     [SerializeField] public ColorState currentColor = ColorState.Red;
     public ColorState CurrentColor => currentColor;
 
+
     [Header("UI")]
     [SerializeField] TextMeshProUGUI scoreText;
-
-    [Header("Jump UI")]
     [SerializeField] Image jumpCooldownImage;
-
-    [Header("Next Color UI")]
     [SerializeField] RawImage nextColorImage;
+
+    [Header("Jump Settings")]
+    [SerializeField] float jumpHeight = 7f;
+    [SerializeField] float jumpForwardBoost = 10f;
+    [SerializeField] float jumpCooldown = 1f;
+    float jumpTimer = 0f;
+    bool canJump = true;
+    bool isGrounded = true;
+
+    [Header("Ground Check")]
+    [SerializeField] Transform groundCheckPoint;
+    [SerializeField] float groundCheckRadius = 0.2f;
+    [SerializeField] LayerMask groundMask;
 
     [Header("Audio")]
     [SerializeField] AudioClip jumpSound;
@@ -56,6 +53,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] AudioClip colorChangeSound;
     AudioSource audioSource;
 
+    // Touch controls
     Vector2 touchStart;
     bool isTouching = false;
     [SerializeField] float swipeThreshold = 50f;
@@ -65,41 +63,43 @@ public class PlayerController : MonoBehaviour
     {
         rb = GetComponent<Rigidbody>();
         if (rb != null) rb.freezeRotation = true;
+
         audioSource = GetComponent<AudioSource>();
-        UpdatePlayerColorVisual();
+
+        ApplyMaterialToPlayer();
         UpdateNextColorUI();
     }
 
     void Update()
     {
         if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
+
         HandleInput();
         GroundCheck();
         HandleJumpCooldown();
-        AnimationControl();
-        if (scoreText) scoreText.text = Math.Floor(transform.position.z).ToString();
+
+        if (scoreText)
+            scoreText.text = Math.Floor(transform.position.z).ToString();
     }
+
     void FixedUpdate()
     {
         if (rb == null) return;
 
-        
-        float targetX = laneX[targetLane];
+        float targetXPos = laneX[targetLane];
         Vector3 pos = rb.position;
+        pos.x = Mathf.Lerp(pos.x, targetXPos, Time.fixedDeltaTime * laneMoveSpeed);
 
-        pos.x = Mathf.Lerp(pos.x, targetX, Time.fixedDeltaTime * laneMoveSpeed);
-
-       
         float forwardVel = GameManager.Instance != null ? GameManager.Instance.speed : forwardSpeed;
-
         rb.MovePosition(new Vector3(pos.x, pos.y, pos.z + forwardVel * Time.fixedDeltaTime));
     }
 
-
+    #region INPUT
     void HandleInput()
     {
         if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
         if (EventSystem.current && EventSystem.current.IsPointerOverGameObject()) return;
+
         if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A)) ChangeLane(-1);
         if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) ChangeLane(+1);
         if (Input.GetKeyDown(KeyCode.Space)) TryJump();
@@ -135,33 +135,24 @@ public class PlayerController : MonoBehaviour
 
     void ProcessTouch(Vector2 delta)
     {
-        if (delta.magnitude < tapThreshold)
-        {
-            CycleColor();
-            return;
-        }
-        if (Mathf.Abs(delta.y) > swipeThreshold && delta.y > 0)
-        {
-            TryJump();
-            return;
-        }
-
-        if (Mathf.Abs(delta.x) > swipeThreshold)
-        {
-            if (delta.x > 0) ChangeLane(+1);
-            else ChangeLane(-1);
-        }
+        if (delta.magnitude < tapThreshold) { CycleColor(); return; }
+        if (Mathf.Abs(delta.y) > swipeThreshold && delta.y > 0) { TryJump(); return; }
+        if (Mathf.Abs(delta.x) > swipeThreshold) ChangeLane(delta.x > 0 ? +1 : -1);
     }
+    #endregion
 
-    void ChangeLane(int dir)
+    #region MOVEMENT
+    void ChangeLane(int direction)
     {
-        int previousLane = targetLane;
-        targetLane = Mathf.Clamp(targetLane + dir, 0, laneX.Length - 1);
-        if (targetLane != previousLane && laneChangeSound && audioSource) audioSource.PlayOneShot(laneChangeSound);
+        int previous = targetLane;
+        targetLane = Mathf.Clamp(targetLane + direction, 0, laneX.Length - 1);
+
+        if (targetLane != previous && laneChangeSound && audioSource)
+            audioSource.PlayOneShot(laneChangeSound);
     }
+
     void TryJump()
     {
-        Debug.Log($"TryJump called - canJump: {canJump}, isGrounded: {isGrounded}");
         if (!canJump || !isGrounded) return;
         Jump();
     }
@@ -169,18 +160,16 @@ public class PlayerController : MonoBehaviour
     void Jump()
     {
         if (audioSource && jumpSound) audioSource.PlayOneShot(jumpSound);
+
         canJump = false;
         jumpTimer = jumpCooldown;
 
-        if (rb != null)
-        {
-            Vector3 v = rb.linearVelocity;
-            v.y = 0f;
-            rb.linearVelocity = v;
+        Vector3 v = rb.linearVelocity;
+        v.y = 0f;
+        rb.linearVelocity = v;
 
-            rb.AddForce(Vector3.up * jumpHeight, ForceMode.Impulse);
-            rb.AddForce(Vector3.forward * jumpForwardBoost, ForceMode.Impulse);
-        }
+        rb.AddForce(Vector3.up * jumpHeight, ForceMode.Impulse);
+        rb.AddForce(Vector3.forward * jumpForwardBoost, ForceMode.Impulse);
 
         if (anim)
         {
@@ -191,14 +180,8 @@ public class PlayerController : MonoBehaviour
 
     void GroundCheck()
     {
-        if (groundCheckPoint == null)
-        {
-            Debug.LogWarning("groundCheckPoint is not assigned!");
-            return;
-        }
         isGrounded = Physics.CheckSphere(groundCheckPoint.position, groundCheckRadius, groundMask);
-        Debug.Log($"isGrounded: {isGrounded}");
-        if (isGrounded && anim) anim.SetBool("IsJumping", false);
+        if (anim) anim.SetBool("IsJumping", !isGrounded);
     }
 
     void HandleJumpCooldown()
@@ -212,19 +195,17 @@ public class PlayerController : MonoBehaviour
                 jumpTimer = 0f;
             }
         }
-        if (jumpCooldownImage) jumpCooldownImage.fillAmount = canJump ? 1f : 1f - (jumpTimer / jumpCooldown);
-    }
 
-    void AnimationControl()
-    {
-        if (!anim) return;
-        if (GameManager.Instance != null) anim.SetFloat("Speed", GameManager.Instance.speed);
-        anim.SetBool("IsJumping", !isGrounded);
+        if (jumpCooldownImage)
+            jumpCooldownImage.fillAmount = canJump ? 1f : 1f - (jumpTimer / jumpCooldown);
     }
+    #endregion
 
+    #region COLOR
     public void CycleColor()
     {
         if (audioSource && colorChangeSound) audioSource.PlayOneShot(colorChangeSound);
+
         currentColor = currentColor switch
         {
             ColorState.Red => ColorState.Green,
@@ -232,45 +213,44 @@ public class PlayerController : MonoBehaviour
             ColorState.Blue => ColorState.Red,
             _ => ColorState.Red
         };
-        UpdatePlayerColorVisual();
+
+        ApplyMaterialToPlayer();
         UpdateNextColorUI();
     }
 
-    ColorState GetNextColor()
+    void ApplyMaterialToPlayer()
     {
-        return currentColor switch
+        Material targetMat = currentColor switch
+        {
+            ColorState.Red => redMat,
+            ColorState.Green => greenMat,
+            ColorState.Blue => blueMat,
+            _ => redMat
+        };
+
+        foreach (Renderer r in bodyRenderers)
+            if (r != null) r.sharedMaterial = targetMat; // NO Instancing
+    }
+
+    void UpdateNextColorUI()
+    {
+        if (!nextColorImage) return;
+
+        ColorState nextColor = currentColor switch
         {
             ColorState.Red => ColorState.Green,
             ColorState.Green => ColorState.Blue,
             ColorState.Blue => ColorState.Red,
             _ => ColorState.Red
         };
-    }
 
-    void UpdateNextColorUI()
-    {
-        if (!nextColorImage) return;
-        ColorState nextColor = GetNextColor();
-        if (nextColor == ColorState.Red) nextColorImage.texture = redMat != null ? redMat.mainTexture : null;
-        else if (nextColor == ColorState.Green) nextColorImage.texture = greenMat != null ? greenMat.mainTexture : null;
-        else if (nextColor == ColorState.Blue) nextColorImage.texture = blueMat != null ? blueMat.mainTexture : null;
-    }
-
-    void UpdatePlayerColorVisual()
-    {
-        if (bodyRenderers == null || bodyRenderers.Length == 0) return;
-        Color c = currentColor switch
+        nextColorImage.texture = nextColor switch
         {
-            ColorState.Green => Color.green,
-            ColorState.Blue => Color.blue,
-            _ => Color.red
+            ColorState.Red => redMat?.mainTexture,
+            ColorState.Green => greenMat?.mainTexture,
+            ColorState.Blue => blueMat?.mainTexture,
+            _ => null
         };
-        foreach (Renderer r in bodyRenderers)
-        {
-            if (r == null) continue;
-            Material m = new Material(r.material);
-            m.color = c;
-            r.material = m;
-        }
     }
+    #endregion
 }
