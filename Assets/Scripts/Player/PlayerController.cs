@@ -88,11 +88,14 @@ public class PlayerController : MonoBehaviour
 
         float targetXPos = laneX[targetLane];
         Vector3 pos = rb.position;
-        pos.x = Mathf.Lerp(pos.x, targetXPos, Time.fixedDeltaTime * laneMoveSpeed);
+
+        pos.x = Mathf.MoveTowards(pos.x, targetXPos, laneMoveSpeed * Time.fixedDeltaTime);
 
         float forwardVel = GameManager.Instance != null ? GameManager.Instance.speed : forwardSpeed;
+
         rb.MovePosition(new Vector3(pos.x, pos.y, pos.z + forwardVel * Time.fixedDeltaTime));
     }
+
 
     #region INPUT
     void HandleInput()
