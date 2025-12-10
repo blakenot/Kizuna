@@ -9,11 +9,14 @@ public class PlayerController : MonoBehaviour
     public enum ColorState { Red, Green, Blue }
 
     [Header("Movement")]
-    [SerializeField] float[] laneX = { -4f, 0f, 4f };
+    [SerializeField] float[] laneX = { -3.8f, 0f, 3.8f };
     [SerializeField] float laneMoveSpeed = 14f;
-    [SerializeField] float forwardSpeed = 10f;
     int targetLane = 1;
+
     Rigidbody rb;
+
+    [Header("Forward Speed")]
+    [SerializeField] float forwardSpeed = 10f;
 
     [Header("Animator")]
     [SerializeField] Animator anim;
@@ -27,25 +30,25 @@ public class PlayerController : MonoBehaviour
     [SerializeField] Renderer[] bodyRenderers;
     [SerializeField] public ColorState currentColor = ColorState.Red;
     public ColorState CurrentColor => currentColor;
+    [SerializeField] ScreenBorderGlow borderGlow;
+ 
 
+    [Header("Jump Settings")]
+    [SerializeField] float jumpForce = 7f;
+    [SerializeField] float jumpCooldown = 0.4f;
+    float jumpTimer = 0f;
+    bool jumpPressed = false;
+    bool isGrounded = true;
+
+    [Header("Ground Check")]
+    [SerializeField] Transform groundCheckPoint;
+    [SerializeField] LayerMask groundMask;
+    float rayDistance;
 
     [Header("UI")]
     [SerializeField] TextMeshProUGUI scoreText;
     [SerializeField] Image jumpCooldownImage;
     [SerializeField] RawImage nextColorImage;
-
-    [Header("Jump Settings")]
-    [SerializeField] float jumpHeight = 7f;
-    [SerializeField] float jumpForwardBoost = 10f;
-    [SerializeField] float jumpCooldown = 1f;
-    float jumpTimer = 0f;
-    bool canJump = true;
-    bool isGrounded = true;
-
-    [Header("Ground Check")]
-    [SerializeField] Transform groundCheckPoint;
-    [SerializeField] float groundCheckRadius = 0.2f;
-    [SerializeField] LayerMask groundMask;
 
     [Header("Audio")]
     [SerializeField] AudioClip jumpSound;
@@ -53,7 +56,6 @@ public class PlayerController : MonoBehaviour
     [SerializeField] AudioClip colorChangeSound;
     AudioSource audioSource;
 
-    // Touch controls
     Vector2 touchStart;
     bool isTouching = false;
     [SerializeField] float swipeThreshold = 50f;
@@ -62,9 +64,10 @@ public class PlayerController : MonoBehaviour
     void Start()
     {
         rb = GetComponent<Rigidbody>();
-        if (rb != null) rb.freezeRotation = true;
-
+        rb.freezeRotation = true;
         audioSource = GetComponent<AudioSource>();
+
+        rayDistance = 0.45f * transform.localScale.y;
 
         ApplyMaterialToPlayer();
         UpdateNextColorUI();
@@ -77,35 +80,52 @@ public class PlayerController : MonoBehaviour
         HandleInput();
         GroundCheck();
         HandleJumpCooldown();
-
-        if (scoreText)
-            scoreText.text = Math.Floor(transform.position.z).ToString();
+        UpdateScore();
     }
 
     void FixedUpdate()
     {
-        if (rb == null) return;
+        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
 
-        float targetXPos = laneX[targetLane];
+        float speed = GameManager.Instance != null ? GameManager.Instance.speed : forwardSpeed;
+
         Vector3 pos = rb.position;
+        pos.x = Mathf.MoveTowards(pos.x, laneX[targetLane], laneMoveSpeed * Time.fixedDeltaTime);
+        pos += Vector3.forward * speed * Time.fixedDeltaTime;
 
-        pos.x = Mathf.MoveTowards(pos.x, targetXPos, laneMoveSpeed * Time.fixedDeltaTime);
-
-        float forwardVel = GameManager.Instance != null ? GameManager.Instance.speed : forwardSpeed;
-
-        rb.MovePosition(new Vector3(pos.x, pos.y, pos.z + forwardVel * Time.fixedDeltaTime));
+        rb.MovePosition(pos);
     }
 
 
     #region INPUT
     void HandleInput()
     {
-        if (GameManager.Instance != null && GameManager.Instance.IsGameOver) return;
         if (EventSystem.current && EventSystem.current.IsPointerOverGameObject()) return;
 
         if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A)) ChangeLane(-1);
         if (Input.GetKeyDown(KeyCode.RightArrow) || Input.GetKeyDown(KeyCode.D)) ChangeLane(+1);
-        if (Input.GetKeyDown(KeyCode.Space)) TryJump();
+        if (Input.GetKeyDown(KeyCode.Space)) jumpPressed = true;
+
+        if (Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.W))
+        {
+            CycleColor();
+        }
+
+        if (Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.S))
+        {
+            CycleColorBackward();
+        }
+
+
+        // Toggle first-person / third-person view
+        if (Input.GetKeyDown(KeyCode.Q) && !GameManager.Instance.IsGameOver)
+        {
+            CameraFollow cam = Camera.main.GetComponent<CameraFollow>();
+            if (cam != null)
+                cam.ToggleView();
+        }
+
+
 
 #if UNITY_EDITOR
         if (Input.GetMouseButtonDown(0))
@@ -119,28 +139,35 @@ public class PlayerController : MonoBehaviour
             isTouching = false;
         }
 #else
-        if (Input.touchCount > 0)
-        {
-            Touch t = Input.GetTouch(0);
-            if (t.phase == TouchPhase.Began)
-            {
-                isTouching = true;
-                touchStart = t.position;
-            }
-            else if (t.phase == TouchPhase.Ended && isTouching)
-            {
-                ProcessTouch(t.position - touchStart);
-                isTouching = false;
-            }
-        }
+if (Input.touchCount > 0)
+{
+    Touch t = Input.GetTouch(0);
+
+    if (EventSystem.current.IsPointerOverGameObject(t.fingerId)) return;
+
+    if (t.phase == TouchPhase.Began)
+    {
+        isTouching = true;
+        touchStart = t.position;
+    }
+    if (t.phase == TouchPhase.Ended && isTouching)
+    {
+        ProcessTouch(t.position - touchStart);
+        isTouching = false;
+    }
+}
 #endif
+
+
+        if (jumpPressed && isGrounded && jumpTimer <= 0f)
+            Jump();
     }
 
     void ProcessTouch(Vector2 delta)
     {
         if (delta.magnitude < tapThreshold) { CycleColor(); return; }
-        if (Mathf.Abs(delta.y) > swipeThreshold && delta.y > 0) { TryJump(); return; }
-        if (Mathf.Abs(delta.x) > swipeThreshold) ChangeLane(delta.x > 0 ? +1 : -1);
+        if (Mathf.Abs(delta.y) > swipeThreshold && delta.y > 0) { jumpPressed = true; return; }
+        if (Mathf.Abs(delta.x) > swipeThreshold) ChangeLane(delta.x > 0 ? 1 : -1);
     }
     #endregion
 
@@ -154,53 +181,64 @@ public class PlayerController : MonoBehaviour
             audioSource.PlayOneShot(laneChangeSound);
     }
 
-    void TryJump()
-    {
-        if (!canJump || !isGrounded) return;
-        Jump();
-    }
+    //void MoveLane()
+    //{
+    //    Vector3 pos = rb.position;
+    //    pos.x = Mathf.MoveTowards(pos.x, laneX[targetLane], laneMoveSpeed * Time.fixedDeltaTime);
+    //    rb.MovePosition(new Vector3(pos.x, rb.position.y, rb.position.z));
+    //}
 
+    //void MoveForward()
+    //{
+    //    float speed = GameManager.Instance != null ? GameManager.Instance.speed : forwardSpeed;
+    //    rb.MovePosition(rb.position + Vector3.forward * speed * Time.fixedDeltaTime);
+    //}
+    #endregion
+
+    #region JUMP
     void Jump()
     {
         if (audioSource && jumpSound) audioSource.PlayOneShot(jumpSound);
-
-        canJump = false;
-        jumpTimer = jumpCooldown;
 
         Vector3 v = rb.linearVelocity;
         v.y = 0f;
         rb.linearVelocity = v;
 
-        rb.AddForce(Vector3.up * jumpHeight, ForceMode.Impulse);
-        rb.AddForce(Vector3.forward * jumpForwardBoost, ForceMode.Impulse);
+        rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+
+        jumpPressed = false;
+        jumpTimer = jumpCooldown;
 
         if (anim)
-        {
-            anim.SetBool("IsJumping", true);
-            anim.SetTrigger("Jump");
-        }
+            anim.SetBool("isGrounded", false); // tell animator we left ground
     }
 
     void GroundCheck()
     {
-        isGrounded = Physics.CheckSphere(groundCheckPoint.position, groundCheckRadius, groundMask);
-        if (anim) anim.SetBool("IsJumping", !isGrounded);
+        bool wasGrounded = isGrounded;
+
+        isGrounded = Physics.Raycast(groundCheckPoint.position, Vector3.down, rayDistance, groundMask);
+
+        if (anim)
+            anim.SetBool("isGrounded", isGrounded);
+
+        Debug.DrawRay(groundCheckPoint.position, Vector3.down * rayDistance, isGrounded ? Color.green : Color.red);
     }
 
     void HandleJumpCooldown()
     {
-        if (!canJump)
-        {
-            jumpTimer -= Time.deltaTime;
-            if (jumpTimer <= 0f && isGrounded)
-            {
-                canJump = true;
-                jumpTimer = 0f;
-            }
-        }
+        jumpTimer -= Time.deltaTime;
 
         if (jumpCooldownImage)
-            jumpCooldownImage.fillAmount = canJump ? 1f : 1f - (jumpTimer / jumpCooldown);
+            jumpCooldownImage.fillAmount = Mathf.Clamp01(1f - jumpTimer / jumpCooldown);
+    }
+    #endregion
+
+    #region UI / SCORE
+    void UpdateScore()
+    {
+        if (scoreText)
+            scoreText.text = Math.Floor(transform.position.z).ToString();
     }
     #endregion
 
@@ -221,9 +259,29 @@ public class PlayerController : MonoBehaviour
         UpdateNextColorUI();
     }
 
+    public void CycleColorBackward()
+    {
+        if (audioSource && colorChangeSound)
+            audioSource.PlayOneShot(colorChangeSound);
+
+        currentColor = currentColor switch
+        {
+            ColorState.Red => ColorState.Blue,
+            ColorState.Green => ColorState.Red,
+            ColorState.Blue => ColorState.Green,
+            _ => ColorState.Red
+        };
+
+        ApplyMaterialToPlayer();
+        UpdateNextColorUI();
+    }
+
+
+
+
     void ApplyMaterialToPlayer()
     {
-        Material targetMat = currentColor switch
+        Material m = currentColor switch
         {
             ColorState.Red => redMat,
             ColorState.Green => greenMat,
@@ -232,26 +290,21 @@ public class PlayerController : MonoBehaviour
         };
 
         foreach (Renderer r in bodyRenderers)
-            if (r != null) r.sharedMaterial = targetMat; // NO Instancing
+            r.sharedMaterial = m;
+
+        if (borderGlow != null)
+            borderGlow.SetGlowColor(m.color);
     }
 
     void UpdateNextColorUI()
     {
         if (!nextColorImage) return;
 
-        ColorState nextColor = currentColor switch
+        nextColorImage.texture = currentColor switch
         {
-            ColorState.Red => ColorState.Green,
-            ColorState.Green => ColorState.Blue,
-            ColorState.Blue => ColorState.Red,
-            _ => ColorState.Red
-        };
-
-        nextColorImage.texture = nextColor switch
-        {
-            ColorState.Red => redMat?.mainTexture,
-            ColorState.Green => greenMat?.mainTexture,
-            ColorState.Blue => blueMat?.mainTexture,
+            ColorState.Red => greenMat.mainTexture,
+            ColorState.Green => blueMat.mainTexture,
+            ColorState.Blue => redMat.mainTexture,
             _ => null
         };
     }

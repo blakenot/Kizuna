@@ -5,6 +5,7 @@ public class TrackSegment : MonoBehaviour
     public enum ColorState { White, Red, Green, Blue, Black }
     [SerializeField] ColorState tileColor;
     Vector3 tilePosition;
+    public ColorState TileColor => tileColor;
 
     void Awake()
     {

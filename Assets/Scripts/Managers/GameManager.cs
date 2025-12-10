@@ -6,6 +6,12 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
+
+    [SerializeField] int orbsCollected = 0;
+    [SerializeField] int orbsNeededForMemory = 5;
+
+    public int OrbsCollected => orbsCollected;
+
     [Header("Speed Settings")]
     [SerializeField] float baseSpeed = 6f;
     [SerializeField] public float speed;
@@ -44,6 +50,32 @@ public class GameManager : MonoBehaviour
             score += Mathf.RoundToInt(speed);
             speed = Mathf.Min(maxSpeed, speed + acceleration);
         }
+    }
+
+
+    public void CollectOrb(int amount)
+    {
+        if (isGameOver) return;
+
+        orbsCollected += amount;
+        Debug.Log("Orb collected! Total: " + orbsCollected);
+
+        if (orbsCollected >= orbsNeededForMemory)
+        {
+            UnlockMemory();
+            orbsCollected = 0; // reset or keep? (Choose based on game design)
+        }
+    }
+
+    void UnlockMemory()
+    {
+        Debug.Log("MEMORY UNLOCKED!");
+
+        // TODO: play animation / open memory UI / start cutscene
+        // Keep lightweight and non-blocking
+
+        // Example minimal placeholder:
+        // UIManager.Instance.ShowMemory();  <- if you add UI later
     }
 
     public void Fail(string reason = "")

@@ -4,17 +4,21 @@ using UnityEngine.UI;
 public class ProgressBarController : MonoBehaviour
 {
     [SerializeField] Slider progressSlider;
-    [SerializeField] Transform player;
+
+    [Header("Orb Goal")]
+    [SerializeField] int orbGoal = 100;
 
     void Update()
     {
         if (GameManager.Instance.IsGameOver) return;
 
-        float currentZ = player.position.z;
-        float maxZ = GameManager.Instance.levelLength;
+       
+        int orbsCollected = GameManager.Instance.OrbsCollected;
 
-        float progress = Mathf.Clamp01(currentZ / maxZ);
+       
+        float orbProgress = Mathf.Clamp01((float)orbsCollected / orbGoal);
 
-        progressSlider.value = progress;
+        
+        progressSlider.value = orbProgress;
     }
 }
