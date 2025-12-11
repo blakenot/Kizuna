@@ -100,6 +100,7 @@ public class PlayerController : MonoBehaviour
     #region INPUT
     void HandleInput()
     {
+        if (Time.timeScale == 0f) return;
         if (EventSystem.current && EventSystem.current.IsPointerOverGameObject()) return;
 
         if (Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.A)) ChangeLane(-1);
@@ -117,7 +118,7 @@ public class PlayerController : MonoBehaviour
         }
 
 
-        // Toggle first-person / third-person view
+        
         if (Input.GetKeyDown(KeyCode.Q) && !GameManager.Instance.IsGameOver)
         {
             CameraFollow cam = Camera.main.GetComponent<CameraFollow>();

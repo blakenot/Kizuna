@@ -361,11 +361,10 @@ MonoBehaviour:
   - Tonight, that gate opens again
   - You are the one who must reunite them OR!!!
   - They will be lost  forever
-  - Tap to begin
   storyText: {fileID: 1603148838}
   nextScene: MainScene
   fadeTime: 0.5
-  holdTime: 2
+  holdTime: 1
 --- !u!4 &352879717
 Transform:
   m_ObjectHideFlags: 0

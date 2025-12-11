@@ -8,7 +8,7 @@ public class GameManager : MonoBehaviour
 
 
     [SerializeField] int orbsCollected = 0;
-    [SerializeField] int orbsNeededForMemory = 5;
+    [SerializeField] int orbsNeededForMemory = 20;
 
     public int OrbsCollected => orbsCollected;
 
@@ -26,7 +26,7 @@ public class GameManager : MonoBehaviour
     [Header("UI")]
     [SerializeField] GameObject gameOverPanel;
 
-    //[Header("Progress Settings")]
+   
     public float levelLength = 500f;
 
     void Awake()
@@ -63,7 +63,7 @@ public class GameManager : MonoBehaviour
         if (orbsCollected >= orbsNeededForMemory)
         {
             UnlockMemory();
-            orbsCollected = 0; // reset or keep? (Choose based on game design)
+            orbsCollected = 0; 
         }
     }
 
@@ -74,8 +74,8 @@ public class GameManager : MonoBehaviour
         // TODO: play animation / open memory UI / start cutscene
         // Keep lightweight and non-blocking
 
-        // Example minimal placeholder:
-        // UIManager.Instance.ShowMemory();  <- if you add UI later
+        //   placeholder:
+        // UIManager.Instance.ShowMemory(); 
     }
 
     public void Fail(string reason = "")
@@ -87,10 +87,14 @@ public class GameManager : MonoBehaviour
         if (gameOverPanel) gameOverPanel.SetActive(true);
     }
 
+
     public void RestartGame()
     {
-        Time.timeScale = 1f;
-        if (gameOverPanel) gameOverPanel.SetActive(false);
+        Time.timeScale = 1f; 
+        if(gameOverPanel) gameOverPanel.SetActive(false); 
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
+
 }
+
+
